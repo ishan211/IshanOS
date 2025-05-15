@@ -1,0 +1,75 @@
+# OS Build Instructions (Real Mode, Two-Stage Boot, QEMU Compatible)
+
+## Requirements:
+- NASM (v2.16+)
+- QEMU (Windows or WSL)
+- dd utility (WSL, Linux, or Windows with GNU tools)
+
+## File Layout:
+- boot.asm       --> Stage 1 bootloader (512 bytes)
+- stage2.asm     --> Stage 2 TUI selector (menu)
+- snake.asm      --> Snake Game (placeholder for now)
+- ishanos.img    --> Final floppy disk image (1.44 MB)
+
+---
+
+## ⚙️tep 1: Assemble ASM files to binaries
+
+nasm -f bin boot.asm -o boot.bin
+nasm -f bin stage2.asm -o stage2.bin
+nasm -f bin snake.asm -o snake.com
+
+> Important:
+> - stage2.asm must end with: `times 512 - ($ - $$) db 0`
+> - This ensures it's exactly 512 bytes (1 sector), otherwise bootloader will misread it.
+
+---
+
+## Step 2: Create blank floppy disk image
+
+dd if=/dev/zero of=ishanos.img bs=512 count=2880
+
+- This creates a 1.44MB image: 512 bytes × 2880 sectors
+
+---
+
+## Step 3: Inject binaries into correct sectors
+
+# Stage 1: Write bootloader to sector 0 (boot sector)
+dd if=boot.bin of=ishanos.img bs=512 seek=0 conv=notrunc
+
+# Stage 2: Write menu to sector 1
+dd if=stage2.bin of=ishanos.img bs=512 seek=1 conv=notrunc
+
+# Snake Game: Write program to sector 10 (for use at 0x9000:0000)
+dd if=snake.com of=ishanos.img bs=512 seek=10 conv=notrunc
+
+---
+
+## Step 4: Boot using QEMU
+
+cd "C:\Program Files\qemu"
+.\qemu-system-i386.exe -fda "C:\Users\ishan\Documents\coding\01 - wip\QBasic\os\ishanos.img"
+
+---
+
+## Result
+
+1. Bootloader prints:
+   IshanOS Launching...
+   I'm Alive!
+   Press ENTER to continue...
+
+2. After pressing ENTER:
+   ==== IshanOS ====
+   > Text Editor
+     Snake Game
+
+3. Pressing Enter on Snake → runs Snake program.
+
+---
+
+## Notes
+- The bootloader uses BIOS INT 13h to load stage2.
+- Stage2 uses INT 10h for text + INT 16h for keyboard.
+- Snake is hardcoded to run from 0x9000:0000 — TUI jumps there.
